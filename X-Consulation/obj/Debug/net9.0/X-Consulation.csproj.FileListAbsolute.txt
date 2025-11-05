@@ -55,3 +55,4 @@
 /Users/dogankeles/RiderProjects/X-Consulation/X-Consulation/obj/Debug/net9.0/X-Consulation.genruntimeconfig.cache
 /Users/dogankeles/RiderProjects/X-Consulation/X-Consulation/obj/Debug/net9.0/ref/X-Consulation.dll
 /Users/dogankeles/RiderProjects/X-Consulation/X-Consulation/bin/Debug/net9.0/firebase-adminsdk.json
+/Users/dogankeles/RiderProjects/X-Consulation/X-Consulation/obj/Debug/net9.0/X-Consulation.sourcelink.json
