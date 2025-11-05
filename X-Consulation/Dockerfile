@@ -11,10 +11,10 @@ COPY . .
 
 # HATA DÜZELTMESİ: Proje yolu, alt klasöre göre ayarlandı.
 # Log'a göre klasör adı "X-Consulation" (tek 'l' ile) olmalıdır.
-RUN dotnet restore "./X-Consulation/X-Consultation.csproj"
+RUN dotnet restore "./X-Consulation/X-Consulation.csproj"
 
 # HATA DÜZELTMESİ: Proje yolu, alt klasöre göre ayarlandı.
-RUN dotnet publish "./X-Consulation/X-Consultation.csproj" -c Release -o /app/publish /p:UseAppHost=false
+RUN dotnet publish "./X-Consulation/X-Consulation.csproj" -c Release -o /app/publish /p:UseAppHost=false
 
 # Final aşaması
 FROM base AS final
@@ -23,4 +23,4 @@ COPY --from=build /app/publish .
 
 # HATA DÜZELTMESİ: Çalıştırılacak DLL adı güncellendi.
 # DLL dosyasının, projenin derlenmiş adı (X-Consultation) ile aynı olmasi gerekir.
-ENTRYPOINT ["dotnet", "X-Consultation.dll"]
+ENTRYPOINT ["dotnet", "X-Consulation.dll"]
