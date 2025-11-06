@@ -1,6 +1,29 @@
 using X_Consulation.ContactFormApi.Services;
 
 var builder = WebApplication.CreateBuilder(args);
+// Railway/Render deployment için PORT ayarı - ZORUNLU!
+var port = Environment.GetEnvironmentVariable("PORT") ?? "5000";
+builder.WebHost.UseUrls($"http://+:{port}");
+
+// CORS ayarları - API için önemli
+builder.Services.AddCors(options =>
+{
+    options.AddDefaultPolicy(policy =>
+    {
+        policy.AllowAnyOrigin()
+            .AllowAnyMethod()
+            .AllowAnyHeader();
+    });
+});
+
+// Firestore credentials için (eğer environment variable kullanacaksanız)
+var firebaseJson = Environment.GetEnvironmentVariable("FIREBASE_CREDENTIALS_JSON");
+if (!string.IsNullOrEmpty(firebaseJson))
+{
+    var tempPath = Path.Combine(Path.GetTempPath(), "firebase-creds.json");
+    File.WriteAllText(tempPath, firebaseJson);
+    Environment.SetEnvironmentVariable("GOOGLE_APPLICATION_CREDENTIALS", tempPath);
+}
 
 // Add services to the container.
 builder.Services.AddControllers();
@@ -20,6 +43,7 @@ builder.Services.AddCors(options =>
 });
 
 var app = builder.Build();
+app.UseCors();
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
