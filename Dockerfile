@@ -1,25 +1,35 @@
-﻿FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS base
-WORKDIR /app
-
+# Build stage
 FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
-ARG BUILD_CONFIGURATION=Release
 WORKDIR /src
+
+# Copy csproj and restore dependencies
 COPY ["X-Consulation/X-Consulation.csproj", "X-Consulation/"]
 RUN dotnet restore "X-Consulation/X-Consulation.csproj"
+
+# Copy everything else and build
 COPY . .
 WORKDIR "/src/X-Consulation"
-RUN dotnet build "X-Consulation.csproj" -c $BUILD_CONFIGURATION -o /app/build
+RUN dotnet build "X-Consulation.csproj" -c Release -o /app/build
 
+# Publish stage
 FROM build AS publish
-ARG BUILD_CONFIGURATION=Release
-RUN dotnet publish "X-Consulation.csproj" -c $BUILD_CONFIGURATION -o /app/publish /p:UseAppHost=false
+RUN dotnet publish "X-Consulation.csproj" -c Release -o /app/publish /p:UseAppHost=false
 
-FROM base AS final
+# Runtime stage
+FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS final
 WORKDIR /app
 
-# Railway ve Render için ZORUNLU satırlar
-ENV ASPNETCORE_URLS=http://+:${PORT:-5000}
+# Expose ports
+EXPOSE 8080
+EXPOSE 8081
+
+# Environment variables for Render/Railway
+ENV ASPNETCORE_URLS=http://+:${PORT:-8080}
 ENV ASPNETCORE_ENVIRONMENT=Production
 
+# Copy published files
 COPY --from=publish /app/publish .
+
+# Start the application
 ENTRYPOINT ["dotnet", "X-Consulation.dll"]
+
