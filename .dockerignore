@@ -1,0 +1,16 @@
+**/.git
+**/.vs
+**/.vscode
+**/.idea
+**/bin
+**/obj
+**/node_modules
+**/.DS_Store
+.git
+.vs
+.vscode
+.idea
+bin
+obj
+node_modules
+.DS_Store
