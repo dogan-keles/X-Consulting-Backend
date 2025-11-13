@@ -2,7 +2,7 @@ using X_Consulation.ContactFormApi.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 // Railway/Render deployment için PORT ayarı - ZORUNLU!
-var port = Environment.GetEnvironmentVariable("PORT") ?? "5000";
+var port = Environment.GetEnvironmentVariable("PORT") ?? "5211";
 builder.WebHost.UseUrls($"http://+:{port}");
 
 // CORS ayarları - API için önemli

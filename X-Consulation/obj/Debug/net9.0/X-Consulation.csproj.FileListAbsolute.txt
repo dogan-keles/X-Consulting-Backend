@@ -1,5 +1,6 @@
 /Users/dogankeles/RiderProjects/X-Consulation/X-Consulation/bin/Debug/net9.0/appsettings.Development.json
 /Users/dogankeles/RiderProjects/X-Consulation/X-Consulation/bin/Debug/net9.0/appsettings.json
+/Users/dogankeles/RiderProjects/X-Consulation/X-Consulation/bin/Debug/net9.0/firebase-adminsdk.json
 /Users/dogankeles/RiderProjects/X-Consulation/X-Consulation/bin/Debug/net9.0/X-Consulation.staticwebassets.endpoints.json
 /Users/dogankeles/RiderProjects/X-Consulation/X-Consulation/bin/Debug/net9.0/X-Consulation
 /Users/dogankeles/RiderProjects/X-Consulation/X-Consulation/bin/Debug/net9.0/X-Consulation.deps.json
@@ -40,6 +41,7 @@
 /Users/dogankeles/RiderProjects/X-Consulation/X-Consulation/obj/Debug/net9.0/X-Consulation.csproj.CoreCompileInputs.cache
 /Users/dogankeles/RiderProjects/X-Consulation/X-Consulation/obj/Debug/net9.0/X-Consulation.MvcApplicationPartsAssemblyInfo.cs
 /Users/dogankeles/RiderProjects/X-Consulation/X-Consulation/obj/Debug/net9.0/X-Consulation.MvcApplicationPartsAssemblyInfo.cache
+/Users/dogankeles/RiderProjects/X-Consulation/X-Consulation/obj/Debug/net9.0/X-Consulation.sourcelink.json
 /Users/dogankeles/RiderProjects/X-Consulation/X-Consulation/obj/Debug/net9.0/rjimswa.dswa.cache.json
 /Users/dogankeles/RiderProjects/X-Consulation/X-Consulation/obj/Debug/net9.0/rjsmrazor.dswa.cache.json
 /Users/dogankeles/RiderProjects/X-Consulation/X-Consulation/obj/Debug/net9.0/rjsmcshtml.dswa.cache.json
@@ -54,5 +56,3 @@
 /Users/dogankeles/RiderProjects/X-Consulation/X-Consulation/obj/Debug/net9.0/X-Consulation.pdb
 /Users/dogankeles/RiderProjects/X-Consulation/X-Consulation/obj/Debug/net9.0/X-Consulation.genruntimeconfig.cache
 /Users/dogankeles/RiderProjects/X-Consulation/X-Consulation/obj/Debug/net9.0/ref/X-Consulation.dll
-/Users/dogankeles/RiderProjects/X-Consulation/X-Consulation/bin/Debug/net9.0/firebase-adminsdk.json
-/Users/dogankeles/RiderProjects/X-Consulation/X-Consulation/obj/Debug/net9.0/X-Consulation.sourcelink.json
