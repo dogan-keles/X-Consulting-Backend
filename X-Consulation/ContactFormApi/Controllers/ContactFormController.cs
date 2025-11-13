@@ -1,3 +1,7 @@
+using Microsoft.AspNetCore.Mvc;
+using X_Consulation.ContactFormApi.DTO;
+using X_Consulation.ContactFormApi.Models;
+
 [HttpPost("submit")]
 public async Task<IActionResult> SubmitContactForm([FromBody] ContactFormRequest request)
 {
