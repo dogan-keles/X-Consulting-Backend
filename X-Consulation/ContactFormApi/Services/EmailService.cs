@@ -90,6 +90,9 @@ public class EmailService : IEmailService
 
         using (var client = new SmtpClient())
         {
+            // Timeout ekle - 10 saniye yeterli
+            client.Timeout = 10000;
+            
             await client.ConnectAsync(smtpServer, smtpPort, 
                 useStartTls ? SecureSocketOptions.StartTls : SecureSocketOptions.Auto);
             
@@ -248,305 +251,303 @@ public class EmailService : IEmailService
     }
     
     public async Task SendQuickAppointmentEmailAsync(QuickAppointment appointment)
-{
-    try
     {
-        var smtpSettings = _configuration.GetSection("SmtpSettings");
-        var senderEmail = smtpSettings["SenderEmail"];
-        var senderName = smtpSettings["SenderName"];
-        var adminEmail = smtpSettings["AdminEmail"];
-        
-        var message = new MimeMessage();
-        message.From.Add(new MailboxAddress(senderName, senderEmail));
-        message.To.Add(new MailboxAddress("Admin", adminEmail));
-        message.Subject = $"🚀 Yeni Hızlı Randevu Talebi - {appointment.Name}";
-
-        var bodyBuilder = new BodyBuilder
+        try
         {
-            HtmlBody = GenerateQuickAppointmentEmailBody(appointment)
-        };
+            var smtpSettings = _configuration.GetSection("SmtpSettings");
+            var senderEmail = smtpSettings["SenderEmail"];
+            var senderName = smtpSettings["SenderName"];
+            var adminEmail = smtpSettings["AdminEmail"];
+            
+            var message = new MimeMessage();
+            message.From.Add(new MailboxAddress(senderName, senderEmail));
+            message.To.Add(new MailboxAddress("Admin", adminEmail));
+            message.Subject = $"🚀 Yeni Hızlı Randevu Talebi - {appointment.Name}";
 
-        message.Body = bodyBuilder.ToMessageBody();
+            var bodyBuilder = new BodyBuilder
+            {
+                HtmlBody = GenerateQuickAppointmentEmailBody(appointment)
+            };
 
-        await SendEmailAsync(message, smtpSettings);
+            message.Body = bodyBuilder.ToMessageBody();
 
-        _logger.LogInformation($"Hızlı randevu e-postası başarıyla gönderildi. Randevu ID: {appointment.Id}");
-    }
-    catch (Exception ex)
-    {
-        _logger.LogError($"Hızlı randevu e-postası gönderirken hata oluştu: {ex.Message}");
-        throw;
-    }
-}
+            await SendEmailAsync(message, smtpSettings);
 
-public async Task SendAppointmentConfirmationEmailAsync(string phoneNumber, string name, string language)
-{
-    try
-    {
-        var smtpSettings = _configuration.GetSection("SmtpSettings");
-        var senderEmail = smtpSettings["SenderEmail"];
-        var senderName = smtpSettings["SenderName"];
-
-        var message = new MimeMessage();
-        message.From.Add(new MailboxAddress(senderName, senderEmail));
-        // Not: Email adresi olmadığı için sadece admin'e gidiyor
-        // Eğer email de alırsanız buraya ekleyebilirsiniz
-        message.To.Add(new MailboxAddress(senderName, senderEmail)); // kendine gönder
-        message.Subject = GetAppointmentConfirmationSubject(language);
-
-        var bodyBuilder = new BodyBuilder
+            _logger.LogInformation($"Hızlı randevu e-postası başarıyla gönderildi. Randevu ID: {appointment.Id}");
+        }
+        catch (Exception ex)
         {
-            HtmlBody = GenerateAppointmentConfirmationEmailBody(name, phoneNumber, language)
-        };
-
-        message.Body = bodyBuilder.ToMessageBody();
-
-        await SendEmailAsync(message, smtpSettings);
-
-        _logger.LogInformation($"Randevu onay e-postası gönderildi. Telefon: {phoneNumber}");
-    }
-    catch (Exception ex)
-    {
-        _logger.LogError($"Randevu onay e-postası gönderirken hata oluştu: {ex.Message}");
-        throw;
-    }
-}
-
-private string GenerateQuickAppointmentEmailBody(QuickAppointment appointment)
-{
-    var dateTimeInfo = "";
-    if (!string.IsNullOrEmpty(appointment.PreferredDate))
-    {
-        dateTimeInfo = $@"
-            <div class='field'>
-                <span class='label'>Tercih Edilen Tarih:</span> {appointment.PreferredDate}
-            </div>
-            <div class='field'>
-                <span class='label'>Tercih Edilen Saat:</span> {appointment.PreferredTime ?? "Belirtilmedi"}
-            </div>";
+            _logger.LogError($"Hızlı randevu e-postası gönderirken hata oluştu: {ex.Message}");
+            throw;
+        }
     }
 
-    return $@"
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <style>
-                body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
-                .container {{ max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 5px; }}
-                .header {{ background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 15px; border-radius: 3px; }}
-                .content {{ padding: 20px 0; }}
-                .field {{ margin-bottom: 15px; }}
-                .label {{ font-weight: bold; color: #667eea; }}
-                .badge {{ display: inline-block; padding: 5px 10px; background-color: #4CAF50; color: white; border-radius: 3px; font-size: 12px; }}
-                .footer {{ text-align: center; padding-top: 20px; border-top: 1px solid #ddd; color: #666; font-size: 12px; }}
-            </style>
-        </head>
-        <body>
-            <div class='container'>
-                <div class='header'>
-                    <h2>🚀 Yeni Hızlı Randevu Talebi</h2>
-                </div>
-                <div class='content'>
-                    <div class='field'>
-                        <span class='badge'>YENİ</span>
-                    </div>
-                    <div class='field'>
-                        <span class='label'>Ad Soyad:</span> {appointment.Name}
-                    </div>
-                    <div class='field'>
-                        <span class='label'>Telefon:</span> {appointment.PhoneNumber}
-                    </div>
-                    <div class='field'>
-                        <span class='label'>Mesaj:</span><br/>
-                        {appointment.Message.Replace("\n", "<br/>")}
-                    </div>
-                    {dateTimeInfo}
-                    <div class='field'>
-                        <span class='label'>Gönderim Tarihi:</span> {appointment.SubmittedAt:dd.MM.yyyy HH:mm:ss}
-                    </div>
-                    <div class='field'>
-                        <span class='label'>Dil:</span> {GetLanguageName(appointment.Language)}
-                    </div>
-                    <div class='field'>
-                        <span class='label'>Durum:</span> <span style='color: #FF9800;'>Beklemede</span>
-                    </div>
-                </div>
-                <div class='footer'>
-                    <p>⚡ Bu randevu talebi hızlı randevu sistemi üzerinden gelmiştir.</p>
-                    <p>Lütfen en kısa sürede müşteri ile iletişime geçin.</p>
-                </div>
-            </div>
-        </body>
-        </html>";
-}
-
-private string GenerateAppointmentConfirmationEmailBody(string name, string phoneNumber, string language)
-{
-    var (title, greeting, message, thanks, footer) = GetAppointmentConfirmationTexts(language);
-
-    return $@"
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <style>
-                body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
-                .container {{ max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 5px; }}
-                .header {{ background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 15px; border-radius: 3px; }}
-                .content {{ padding: 20px 0; }}
-                .icon {{ font-size: 60px; text-align: center; margin: 20px 0; }}
-                .footer {{ text-align: center; padding-top: 20px; border-top: 1px solid #ddd; color: #666; font-size: 12px; }}
-            </style>
-        </head>
-        <body>
-            <div class='container'>
-                <div class='header'>
-                    <h2>{title}</h2>
-                </div>
-                <div class='icon'>✓</div>
-                <div class='content'>
-                    <p>{greeting} {name},</p>
-                    <p>{message}</p>
-                    <p><strong>İletişim Numaranız:</strong> {phoneNumber}</p>
-                    <p>{thanks}</p>
-                </div>
-                <div class='footer'>
-                    <p>{footer}</p>
-                </div>
-            </div>
-        </body>
-        </html>";
-}
-
-private string GetAppointmentConfirmationSubject(string language)
-{
-    return language switch
+    public async Task SendAppointmentConfirmationEmailAsync(string phoneNumber, string name, string language)
     {
-        "en" => "✓ Your Appointment Request Received",
-        "fr" => "✓ Votre demande de rendez-vous reçue",
-        "ku" => "✓ Daxwaza berfireha we hate qebûl kirin",
-        _ => "✓ Randevu Talebiniz Alındı"
-    };
-}
-
-private (string title, string greeting, string message, string thanks, string footer) GetAppointmentConfirmationTexts(string language)
-{
-    return language switch
-    {
-        "en" => (
-            "Appointment Request Received",
-            "Hello",
-            "Your quick appointment request has been successfully received. Our team will contact you as soon as possible to confirm your appointment.",
-            "Thank you for choosing us!",
-            "X Consultation - Appointment System"
-        ),
-        "fr" => (
-            "Demande de Rendez-vous Reçue",
-            "Bonjour",
-            "Votre demande de rendez-vous rapide a été reçue avec succès. Notre équipe vous contactera dès que possible pour confirmer votre rendez-vous.",
-            "Merci de nous avoir choisis!",
-            "X Consultation - Système de Rendez-vous"
-        ),
-        "ku" => (
-            "Daxwaza Berfireh Hate Qebûl Kirin",
-            "Bi xêr",
-            "Daxwaza berfireha we ya bilez bi serkeftî hate qebûl kirin. Tîma me dê bi zû bi we re têkevin têkiliyê da ku berfireha we bipejirînin.",
-            "Spas ji bo hilbijartina me!",
-            "X Consultation - Pergala Berfireh"
-        ),
-        _ => (
-            "Randevu Talebiniz Alındı",
-            "Merhaba",
-            "Hızlı randevu talebiniz başarıyla alınmıştır. Ekibimiz randevunuzu onaylamak için en kısa zamanda sizinle iletişime geçecektir.",
-            "Bizi tercih ettiğiniz için teşekkürler!",
-            "X Consultation - Randevu Sistemi"
-        )
-    };
-}
-public async Task SendDateTimeUpdateEmailAsync(string phoneNumber, string name, string preferredDate, string preferredTime, string language)
-{
-    try
-    {
-        var smtpSettings = _configuration.GetSection("SmtpSettings");
-        var senderEmail = smtpSettings["SenderEmail"];
-        var senderName = smtpSettings["SenderName"];
-        var adminEmail = smtpSettings["AdminEmail"];
-        
-        var message = new MimeMessage();
-        message.From.Add(new MailboxAddress(senderName, senderEmail));
-        message.To.Add(new MailboxAddress("Admin", adminEmail));
-        message.Subject = $"📅 Randevu Tarih/Saat Tercihi - {name}";
-
-        var bodyBuilder = new BodyBuilder
+        try
         {
-            HtmlBody = GenerateDateTimeUpdateEmailBody(phoneNumber, name, preferredDate, preferredTime, language)
-        };
+            var smtpSettings = _configuration.GetSection("SmtpSettings");
+            var senderEmail = smtpSettings["SenderEmail"];
+            var senderName = smtpSettings["SenderName"];
 
-        message.Body = bodyBuilder.ToMessageBody();
+            var message = new MimeMessage();
+            message.From.Add(new MailboxAddress(senderName, senderEmail));
+            message.To.Add(new MailboxAddress(senderName, senderEmail));
+            message.Subject = GetAppointmentConfirmationSubject(language);
 
-        await SendEmailAsync(message, smtpSettings);
+            var bodyBuilder = new BodyBuilder
+            {
+                HtmlBody = GenerateAppointmentConfirmationEmailBody(name, phoneNumber, language)
+            };
 
-        _logger.LogInformation($"Tarih/saat güncelleme e-postası gönderildi. Telefon: {phoneNumber}");
+            message.Body = bodyBuilder.ToMessageBody();
+
+            await SendEmailAsync(message, smtpSettings);
+
+            _logger.LogInformation($"Randevu onay e-postası gönderildi. Telefon: {phoneNumber}");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError($"Randevu onay e-postası gönderirken hata oluştu: {ex.Message}");
+            throw;
+        }
     }
-    catch (Exception ex)
+
+    private string GenerateQuickAppointmentEmailBody(QuickAppointment appointment)
     {
-        _logger.LogError($"Tarih/saat güncelleme e-postası gönderirken hata: {ex.Message}");
-        throw;
-    }
-}
-
-private string GenerateDateTimeUpdateEmailBody(string phoneNumber, string name, string preferredDate, string preferredTime, string language)
-{
-    return $@"
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <style>
-                body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
-                .container {{ max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 5px; }}
-                .header {{ background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 15px; border-radius: 3px; }}
-                .content {{ padding: 20px 0; }}
-                .field {{ margin-bottom: 15px; }}
-                .label {{ font-weight: bold; color: #667eea; }}
-                .highlight {{ background-color: #fff3cd; padding: 15px; border-left: 4px solid #ffc107; margin: 20px 0; }}
-                .footer {{ text-align: center; padding-top: 20px; border-top: 1px solid #ddd; color: #666; font-size: 12px; }}
-            </style>
-        </head>
-        <body>
-            <div class='container'>
-                <div class='header'>
-                    <h2>📅 Randevu Tarih/Saat Tercihi Güncellendi</h2>
+        var dateTimeInfo = "";
+        if (!string.IsNullOrEmpty(appointment.PreferredDate))
+        {
+            dateTimeInfo = $@"
+                <div class='field'>
+                    <span class='label'>Tercih Edilen Tarih:</span> {appointment.PreferredDate}
                 </div>
-                <div class='content'>
-                    <div class='field'>
-                        <span class='label'>Müşteri Adı:</span> {name}
+                <div class='field'>
+                    <span class='label'>Tercih Edilen Saat:</span> {appointment.PreferredTime ?? "Belirtilmedi"}
+                </div>";
+        }
+
+        return $@"
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <style>
+                    body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+                    .container {{ max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 5px; }}
+                    .header {{ background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 15px; border-radius: 3px; }}
+                    .content {{ padding: 20px 0; }}
+                    .field {{ margin-bottom: 15px; }}
+                    .label {{ font-weight: bold; color: #667eea; }}
+                    .badge {{ display: inline-block; padding: 5px 10px; background-color: #4CAF50; color: white; border-radius: 3px; font-size: 12px; }}
+                    .footer {{ text-align: center; padding-top: 20px; border-top: 1px solid #ddd; color: #666; font-size: 12px; }}
+                </style>
+            </head>
+            <body>
+                <div class='container'>
+                    <div class='header'>
+                        <h2>🚀 Yeni Hızlı Randevu Talebi</h2>
                     </div>
-                    <div class='field'>
-                        <span class='label'>Telefon:</span> {phoneNumber}
-                    </div>
-                    
-                    <div class='highlight'>
+                    <div class='content'>
                         <div class='field'>
-                            <span class='label'>📅 Tercih Edilen Tarih:</span> {preferredDate}
+                            <span class='badge'>YENİ</span>
                         </div>
                         <div class='field'>
-                            <span class='label'>🕐 Tercih Edilen Saat:</span> {preferredTime}
+                            <span class='label'>Ad Soyad:</span> {appointment.Name}
+                        </div>
+                        <div class='field'>
+                            <span class='label'>Telefon:</span> {appointment.PhoneNumber}
+                        </div>
+                        <div class='field'>
+                            <span class='label'>Mesaj:</span><br/>
+                            {appointment.Message.Replace("\n", "<br/>")}
+                        </div>
+                        {dateTimeInfo}
+                        <div class='field'>
+                            <span class='label'>Gönderim Tarihi:</span> {appointment.SubmittedAt:dd.MM.yyyy HH:mm:ss}
+                        </div>
+                        <div class='field'>
+                            <span class='label'>Dil:</span> {GetLanguageName(appointment.Language)}
+                        </div>
+                        <div class='field'>
+                            <span class='label'>Durum:</span> <span style='color: #FF9800;'>Beklemede</span>
                         </div>
                     </div>
-                    
-                    <div class='field'>
-                        <span class='label'>Dil:</span> {GetLanguageName(language)}
-                    </div>
-                    <div class='field'>
-                        <span class='label'>Güncellenme Tarihi:</span> {DateTime.UtcNow:dd.MM.yyyy HH:mm:ss}
+                    <div class='footer'>
+                        <p>⚡ Bu randevu talebi hızlı randevu sistemi üzerinden gelmiştir.</p>
+                        <p>Lütfen en kısa sürede müşteri ile iletişime geçin.</p>
                     </div>
                 </div>
-                <div class='footer'>
-                    <p>⚡ Müşteri tercih ettiği tarih ve saati belirtti.</p>
-                    <p>Lütfen müşteriyle iletişime geçip randevuyu onaylayın.</p>
-                </div>
-            </div>
-        </body>
-        </html>";
-}
+            </body>
+            </html>";
+    }
 
+    private string GenerateAppointmentConfirmationEmailBody(string name, string phoneNumber, string language)
+    {
+        var (title, greeting, message, thanks, footer) = GetAppointmentConfirmationTexts(language);
+
+        return $@"
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <style>
+                    body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+                    .container {{ max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 5px; }}
+                    .header {{ background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 15px; border-radius: 3px; }}
+                    .content {{ padding: 20px 0; }}
+                    .icon {{ font-size: 60px; text-align: center; margin: 20px 0; }}
+                    .footer {{ text-align: center; padding-top: 20px; border-top: 1px solid #ddd; color: #666; font-size: 12px; }}
+                </style>
+            </head>
+            <body>
+                <div class='container'>
+                    <div class='header'>
+                        <h2>{title}</h2>
+                    </div>
+                    <div class='icon'>✓</div>
+                    <div class='content'>
+                        <p>{greeting} {name},</p>
+                        <p>{message}</p>
+                        <p><strong>İletişim Numaranız:</strong> {phoneNumber}</p>
+                        <p>{thanks}</p>
+                    </div>
+                    <div class='footer'>
+                        <p>{footer}</p>
+                    </div>
+                </div>
+            </body>
+            </html>";
+    }
+
+    private string GetAppointmentConfirmationSubject(string language)
+    {
+        return language switch
+        {
+            "en" => "✓ Your Appointment Request Received",
+            "fr" => "✓ Votre demande de rendez-vous reçue",
+            "ku" => "✓ Daxwaza berfireha we hate qebûl kirin",
+            _ => "✓ Randevu Talebiniz Alındı"
+        };
+    }
+
+    private (string title, string greeting, string message, string thanks, string footer) GetAppointmentConfirmationTexts(string language)
+    {
+        return language switch
+        {
+            "en" => (
+                "Appointment Request Received",
+                "Hello",
+                "Your quick appointment request has been successfully received. Our team will contact you as soon as possible to confirm your appointment.",
+                "Thank you for choosing us!",
+                "X Consultation - Appointment System"
+            ),
+            "fr" => (
+                "Demande de Rendez-vous Reçue",
+                "Bonjour",
+                "Votre demande de rendez-vous rapide a été reçue avec succès. Notre équipe vous contactera dès que possible pour confirmer votre rendez-vous.",
+                "Merci de nous avoir choisis!",
+                "X Consultation - Système de Rendez-vous"
+            ),
+            "ku" => (
+                "Daxwaza Berfireh Hate Qebûl Kirin",
+                "Bi xêr",
+                "Daxwaza berfireha we ya bilez bi serkeftî hate qebûl kirin. Tîma me dê bi zû bi we re têkevin têkiliyê da ku berfireha we bipejirînin.",
+                "Spas ji bo hilbijartina me!",
+                "X Consultation - Pergala Berfireh"
+            ),
+            _ => (
+                "Randevu Talebiniz Alındı",
+                "Merhaba",
+                "Hızlı randevu talebiniz başarıyla alınmıştır. Ekibimiz randevunuzu onaylamak için en kısa zamanda sizinle iletişime geçecektir.",
+                "Bizi tercih ettiğiniz için teşekkürler!",
+                "X Consultation - Randevu Sistemi"
+            )
+        };
+    }
+
+    public async Task SendDateTimeUpdateEmailAsync(string phoneNumber, string name, string preferredDate, string preferredTime, string language)
+    {
+        try
+        {
+            var smtpSettings = _configuration.GetSection("SmtpSettings");
+            var senderEmail = smtpSettings["SenderEmail"];
+            var senderName = smtpSettings["SenderName"];
+            var adminEmail = smtpSettings["AdminEmail"];
+            
+            var message = new MimeMessage();
+            message.From.Add(new MailboxAddress(senderName, senderEmail));
+            message.To.Add(new MailboxAddress("Admin", adminEmail));
+            message.Subject = $"📅 Randevu Tarih/Saat Tercihi - {name}";
+
+            var bodyBuilder = new BodyBuilder
+            {
+                HtmlBody = GenerateDateTimeUpdateEmailBody(phoneNumber, name, preferredDate, preferredTime, language)
+            };
+
+            message.Body = bodyBuilder.ToMessageBody();
+
+            await SendEmailAsync(message, smtpSettings);
+
+            _logger.LogInformation($"Tarih/saat güncelleme e-postası gönderildi. Telefon: {phoneNumber}");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError($"Tarih/saat güncelleme e-postası gönderirken hata: {ex.Message}");
+            throw;
+        }
+    }
+
+    private string GenerateDateTimeUpdateEmailBody(string phoneNumber, string name, string preferredDate, string preferredTime, string language)
+    {
+        return $@"
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <style>
+                    body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+                    .container {{ max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 5px; }}
+                    .header {{ background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 15px; border-radius: 3px; }}
+                    .content {{ padding: 20px 0; }}
+                    .field {{ margin-bottom: 15px; }}
+                    .label {{ font-weight: bold; color: #667eea; }}
+                    .highlight {{ background-color: #fff3cd; padding: 15px; border-left: 4px solid #ffc107; margin: 20px 0; }}
+                    .footer {{ text-align: center; padding-top: 20px; border-top: 1px solid #ddd; color: #666; font-size: 12px; }}
+                </style>
+            </head>
+            <body>
+                <div class='container'>
+                    <div class='header'>
+                        <h2>📅 Randevu Tarih/Saat Tercihi Güncellendi</h2>
+                    </div>
+                    <div class='content'>
+                        <div class='field'>
+                            <span class='label'>Müşteri Adı:</span> {name}
+                        </div>
+                        <div class='field'>
+                            <span class='label'>Telefon:</span> {phoneNumber}
+                        </div>
+                        
+                        <div class='highlight'>
+                            <div class='field'>
+                                <span class='label'>📅 Tercih Edilen Tarih:</span> {preferredDate}
+                            </div>
+                            <div class='field'>
+                                <span class='label'>🕐 Tercih Edilen Saat:</span> {preferredTime}
+                            </div>
+                        </div>
+                        
+                        <div class='field'>
+                            <span class='label'>Dil:</span> {GetLanguageName(language)}
+                        </div>
+                        <div class='field'>
+                            <span class='label'>Güncellenme Tarihi:</span> {DateTime.UtcNow:dd.MM.yyyy HH:mm:ss}
+                        </div>
+                    </div>
+                    <div class='footer'>
+                        <p>⚡ Müşteri tercih ettiği tarih ve saati belirtti.</p>
+                        <p>Lütfen müşteriyle iletişime geçip randevuyu onaylayın.</p>
+                    </div>
+                </div>
+            </body>
+            </html>";
+    }
 }
