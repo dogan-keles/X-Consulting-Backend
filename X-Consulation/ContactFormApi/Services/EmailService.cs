@@ -1,6 +1,6 @@
-using MailKit.Net.Smtp;
-using MailKit.Security;
-using MimeKit;
+using System.Net.Http.Headers;
+using System.Text;
+using System.Text.Json;
 using Microsoft.Extensions.Configuration;
 using X_Consulation.ContactFormApi.Models;
 
@@ -10,11 +10,13 @@ public class EmailService : IEmailService
 {
     private readonly IConfiguration _configuration;
     private readonly ILogger<EmailService> _logger;
+    private readonly HttpClient _httpClient;
 
-    public EmailService(IConfiguration configuration, ILogger<EmailService> logger)
+    public EmailService(IConfiguration configuration, ILogger<EmailService> logger, HttpClient httpClient)
     {
         _configuration = configuration;
         _logger = logger;
+        _httpClient = httpClient;
     }
 
     public async Task SendContactFormEmailAsync(ContactForm contactForm)
@@ -26,19 +28,10 @@ public class EmailService : IEmailService
             var senderName = smtpSettings["SenderName"];
             var adminEmail = smtpSettings["AdminEmail"];
             
-            var message = new MimeMessage();
-            message.From.Add(new MailboxAddress(senderName, senderEmail));
-            message.To.Add(new MailboxAddress("Admin", adminEmail));
-            message.Subject = $"Yeni İletişim Formu - {contactForm.Topic}";
+            var subject = $"Yeni İletişim Formu - {contactForm.Topic}";
+            var htmlBody = GenerateContactFormEmailBody(contactForm);
 
-            var bodyBuilder = new BodyBuilder
-            {
-                HtmlBody = GenerateContactFormEmailBody(contactForm)
-            };
-
-            message.Body = bodyBuilder.ToMessageBody();
-
-            await SendEmailAsync(message, smtpSettings);
+            await SendEmailViaResendAsync(senderEmail, senderName, adminEmail, "Admin", subject, htmlBody);
 
             _logger.LogInformation($"İletişim formu e-postası başarıyla gönderildi. Form ID: {contactForm.Id}");
         }
@@ -57,19 +50,10 @@ public class EmailService : IEmailService
             var senderEmail = smtpSettings["SenderEmail"];
             var senderName = smtpSettings["SenderName"];
 
-            var message = new MimeMessage();
-            message.From.Add(new MailboxAddress(senderName, senderEmail));
-            message.To.Add(new MailboxAddress(recipientName, recipientEmail));
-            message.Subject = GetConfirmationSubject(language);
+            var subject = GetConfirmationSubject(language);
+            var htmlBody = GenerateConfirmationEmailBody(recipientName, language);
 
-            var bodyBuilder = new BodyBuilder
-            {
-                HtmlBody = GenerateConfirmationEmailBody(recipientName, language)
-            };
-
-            message.Body = bodyBuilder.ToMessageBody();
-
-            await SendEmailAsync(message, smtpSettings);
+            await SendEmailViaResendAsync(senderEmail, senderName, recipientEmail, recipientName, subject, htmlBody);
 
             _logger.LogInformation($"Onay e-postası {recipientEmail} adresine gönderildi.");
         }
@@ -80,30 +64,107 @@ public class EmailService : IEmailService
         }
     }
 
-    private async Task SendEmailAsync(MimeMessage message, IConfigurationSection smtpSettings)
+    public async Task SendQuickAppointmentEmailAsync(QuickAppointment appointment)
     {
-        var smtpServer = smtpSettings["SmtpServer"];
-        var smtpPort = int.Parse(smtpSettings["SmtpPort"]);
-        var smtpUsername = smtpSettings["SmtpUsername"];
-        var smtpPassword = smtpSettings["SmtpPassword"];
-        var useStartTls = bool.Parse(smtpSettings["UseStartTls"] ?? "true");
-
-        using (var client = new SmtpClient())
+        try
         {
-            // Timeout ekle - 10 saniye yeterli
-            client.Timeout = 10000;
+            var smtpSettings = _configuration.GetSection("SmtpSettings");
+            var senderEmail = smtpSettings["SenderEmail"];
+            var senderName = smtpSettings["SenderName"];
+            var adminEmail = smtpSettings["AdminEmail"];
             
-            await client.ConnectAsync(smtpServer, smtpPort, 
-                useStartTls ? SecureSocketOptions.StartTls : SecureSocketOptions.Auto);
-            
-            if (!string.IsNullOrEmpty(smtpUsername) && !string.IsNullOrEmpty(smtpPassword))
-            {
-                await client.AuthenticateAsync(smtpUsername, smtpPassword);
-            }
+            var subject = $"🚀 Yeni Hızlı Randevu Talebi - {appointment.Name}";
+            var htmlBody = GenerateQuickAppointmentEmailBody(appointment);
 
-            await client.SendAsync(message);
-            await client.DisconnectAsync(true);
+            await SendEmailViaResendAsync(senderEmail, senderName, adminEmail, "Admin", subject, htmlBody);
+
+            _logger.LogInformation($"Hızlı randevu e-postası başarıyla gönderildi. Randevu ID: {appointment.Id}");
         }
+        catch (Exception ex)
+        {
+            _logger.LogError($"Hızlı randevu e-postası gönderirken hata oluştu: {ex.Message}");
+            throw;
+        }
+    }
+
+    public async Task SendAppointmentConfirmationEmailAsync(string phoneNumber, string name, string language)
+    {
+        try
+        {
+            var smtpSettings = _configuration.GetSection("SmtpSettings");
+            var senderEmail = smtpSettings["SenderEmail"];
+            var senderName = smtpSettings["SenderName"];
+
+            var subject = GetAppointmentConfirmationSubject(language);
+            var htmlBody = GenerateAppointmentConfirmationEmailBody(name, phoneNumber, language);
+
+            await SendEmailViaResendAsync(senderEmail, senderName, senderEmail, senderName, subject, htmlBody);
+
+            _logger.LogInformation($"Randevu onay e-postası gönderildi. Telefon: {phoneNumber}");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError($"Randevu onay e-postası gönderirken hata oluştu: {ex.Message}");
+            throw;
+        }
+    }
+
+    public async Task SendDateTimeUpdateEmailAsync(string phoneNumber, string name, string preferredDate, string preferredTime, string language)
+    {
+        try
+        {
+            var smtpSettings = _configuration.GetSection("SmtpSettings");
+            var senderEmail = smtpSettings["SenderEmail"];
+            var senderName = smtpSettings["SenderName"];
+            var adminEmail = smtpSettings["AdminEmail"];
+            
+            var subject = $"📅 Randevu Tarih/Saat Tercihi - {name}";
+            var htmlBody = GenerateDateTimeUpdateEmailBody(phoneNumber, name, preferredDate, preferredTime, language);
+
+            await SendEmailViaResendAsync(senderEmail, senderName, adminEmail, "Admin", subject, htmlBody);
+
+            _logger.LogInformation($"Tarih/saat güncelleme e-postası gönderildi. Telefon: {phoneNumber}");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError($"Tarih/saat güncelleme e-postası gönderirken hata: {ex.Message}");
+            throw;
+        }
+    }
+
+    private async Task SendEmailViaResendAsync(string fromEmail, string fromName, string toEmail, string toName, string subject, string htmlBody)
+    {
+        var apiKey = _configuration["ResendApiKey"];
+        
+        if (string.IsNullOrEmpty(apiKey))
+        {
+            throw new Exception("ResendApiKey configuration is missing");
+        }
+
+        var requestBody = new
+        {
+            from = $"{fromName} <onboarding@resend.dev>",
+            to = new[] { toEmail },
+            subject = subject,
+            html = htmlBody
+        };
+
+        var jsonContent = JsonSerializer.Serialize(requestBody);
+        var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
+
+        _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
+
+        var response = await _httpClient.PostAsync("https://api.resend.com/emails", content);
+        
+        if (!response.IsSuccessStatusCode)
+        {
+            var errorContent = await response.Content.ReadAsStringAsync();
+            _logger.LogError($"Resend API error: {response.StatusCode} - {errorContent}");
+            throw new Exception($"Failed to send email via Resend: {response.StatusCode}");
+        }
+
+        var responseContent = await response.Content.ReadAsStringAsync();
+        _logger.LogInformation($"Email sent successfully via Resend. Response: {responseContent}");
     }
 
     private string GenerateContactFormEmailBody(ContactForm contactForm)
@@ -191,126 +252,6 @@ public class EmailService : IEmailService
                 </div>
             </body>
             </html>";
-    }
-
-    private string GetConfirmationSubject(string language)
-    {
-        return language switch
-        {
-            "en" => "Your Form Has Been Received",
-            "fr" => "Votre formulaire a été reçu",
-            "ku" => "Forma we ya we hat gihişt",
-            _ => "İletişim Formunuz Alındı"
-        };
-    }
-
-    private (string title, string greeting, string message, string thanks, string footer) GetConfirmationTexts(string language)
-    {
-        return language switch
-        {
-            "en" => (
-                "Form Received",
-                "Hello",
-                "Your contact form has been successfully received. We will get back to you as soon as possible.",
-                "Thank you!",
-                "X Consultation - Contact System"
-            ),
-            "fr" => (
-                "Formulaire Reçu",
-                "Bonjour",
-                "Votre formulaire de contact a été reçu avec succès. Nous vous répondrons dès que possible.",
-                "Merci!",
-                "X Consultation - Système de Contact"
-            ),
-            "ku" => (
-                "Forma Hate",
-                "Bi xêr",
-                "Forma kontakta we bi serkeftî hate qebûl kirin. Em lez re dê bi we re têkevin.",
-                "Spas!",
-                "X Consultation - Pergala Têkiliyê"
-            ),
-            _ => (
-                "Formunuz Alındı",
-                "Merhaba",
-                "İletişim formunuz başarıyla alınmıştır. En kısa zamanda sizinle iletişime geçeceğiz.",
-                "Teşekkürler!",
-                "X Consultation - İletişim Sistemi"
-            )
-        };
-    }
-
-    private string GetLanguageName(string language)
-    {
-        return language switch
-        {
-            "en" => "English",
-            "fr" => "Français",
-            "ku" => "Kurdî",
-            _ => "Türkçe"
-        };
-    }
-    
-    public async Task SendQuickAppointmentEmailAsync(QuickAppointment appointment)
-    {
-        try
-        {
-            var smtpSettings = _configuration.GetSection("SmtpSettings");
-            var senderEmail = smtpSettings["SenderEmail"];
-            var senderName = smtpSettings["SenderName"];
-            var adminEmail = smtpSettings["AdminEmail"];
-            
-            var message = new MimeMessage();
-            message.From.Add(new MailboxAddress(senderName, senderEmail));
-            message.To.Add(new MailboxAddress("Admin", adminEmail));
-            message.Subject = $"🚀 Yeni Hızlı Randevu Talebi - {appointment.Name}";
-
-            var bodyBuilder = new BodyBuilder
-            {
-                HtmlBody = GenerateQuickAppointmentEmailBody(appointment)
-            };
-
-            message.Body = bodyBuilder.ToMessageBody();
-
-            await SendEmailAsync(message, smtpSettings);
-
-            _logger.LogInformation($"Hızlı randevu e-postası başarıyla gönderildi. Randevu ID: {appointment.Id}");
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError($"Hızlı randevu e-postası gönderirken hata oluştu: {ex.Message}");
-            throw;
-        }
-    }
-
-    public async Task SendAppointmentConfirmationEmailAsync(string phoneNumber, string name, string language)
-    {
-        try
-        {
-            var smtpSettings = _configuration.GetSection("SmtpSettings");
-            var senderEmail = smtpSettings["SenderEmail"];
-            var senderName = smtpSettings["SenderName"];
-
-            var message = new MimeMessage();
-            message.From.Add(new MailboxAddress(senderName, senderEmail));
-            message.To.Add(new MailboxAddress(senderName, senderEmail));
-            message.Subject = GetAppointmentConfirmationSubject(language);
-
-            var bodyBuilder = new BodyBuilder
-            {
-                HtmlBody = GenerateAppointmentConfirmationEmailBody(name, phoneNumber, language)
-            };
-
-            message.Body = bodyBuilder.ToMessageBody();
-
-            await SendEmailAsync(message, smtpSettings);
-
-            _logger.LogInformation($"Randevu onay e-postası gönderildi. Telefon: {phoneNumber}");
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError($"Randevu onay e-postası gönderirken hata oluştu: {ex.Message}");
-            throw;
-        }
     }
 
     private string GenerateQuickAppointmentEmailBody(QuickAppointment appointment)
@@ -418,84 +359,6 @@ public class EmailService : IEmailService
             </html>";
     }
 
-    private string GetAppointmentConfirmationSubject(string language)
-    {
-        return language switch
-        {
-            "en" => "✓ Your Appointment Request Received",
-            "fr" => "✓ Votre demande de rendez-vous reçue",
-            "ku" => "✓ Daxwaza berfireha we hate qebûl kirin",
-            _ => "✓ Randevu Talebiniz Alındı"
-        };
-    }
-
-    private (string title, string greeting, string message, string thanks, string footer) GetAppointmentConfirmationTexts(string language)
-    {
-        return language switch
-        {
-            "en" => (
-                "Appointment Request Received",
-                "Hello",
-                "Your quick appointment request has been successfully received. Our team will contact you as soon as possible to confirm your appointment.",
-                "Thank you for choosing us!",
-                "X Consultation - Appointment System"
-            ),
-            "fr" => (
-                "Demande de Rendez-vous Reçue",
-                "Bonjour",
-                "Votre demande de rendez-vous rapide a été reçue avec succès. Notre équipe vous contactera dès que possible pour confirmer votre rendez-vous.",
-                "Merci de nous avoir choisis!",
-                "X Consultation - Système de Rendez-vous"
-            ),
-            "ku" => (
-                "Daxwaza Berfireh Hate Qebûl Kirin",
-                "Bi xêr",
-                "Daxwaza berfireha we ya bilez bi serkeftî hate qebûl kirin. Tîma me dê bi zû bi we re têkevin têkiliyê da ku berfireha we bipejirînin.",
-                "Spas ji bo hilbijartina me!",
-                "X Consultation - Pergala Berfireh"
-            ),
-            _ => (
-                "Randevu Talebiniz Alındı",
-                "Merhaba",
-                "Hızlı randevu talebiniz başarıyla alınmıştır. Ekibimiz randevunuzu onaylamak için en kısa zamanda sizinle iletişime geçecektir.",
-                "Bizi tercih ettiğiniz için teşekkürler!",
-                "X Consultation - Randevu Sistemi"
-            )
-        };
-    }
-
-    public async Task SendDateTimeUpdateEmailAsync(string phoneNumber, string name, string preferredDate, string preferredTime, string language)
-    {
-        try
-        {
-            var smtpSettings = _configuration.GetSection("SmtpSettings");
-            var senderEmail = smtpSettings["SenderEmail"];
-            var senderName = smtpSettings["SenderName"];
-            var adminEmail = smtpSettings["AdminEmail"];
-            
-            var message = new MimeMessage();
-            message.From.Add(new MailboxAddress(senderName, senderEmail));
-            message.To.Add(new MailboxAddress("Admin", adminEmail));
-            message.Subject = $"📅 Randevu Tarih/Saat Tercihi - {name}";
-
-            var bodyBuilder = new BodyBuilder
-            {
-                HtmlBody = GenerateDateTimeUpdateEmailBody(phoneNumber, name, preferredDate, preferredTime, language)
-            };
-
-            message.Body = bodyBuilder.ToMessageBody();
-
-            await SendEmailAsync(message, smtpSettings);
-
-            _logger.LogInformation($"Tarih/saat güncelleme e-postası gönderildi. Telefon: {phoneNumber}");
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError($"Tarih/saat güncelleme e-postası gönderirken hata: {ex.Message}");
-            throw;
-        }
-    }
-
     private string GenerateDateTimeUpdateEmailBody(string phoneNumber, string name, string preferredDate, string preferredTime, string language)
     {
         return $@"
@@ -549,5 +412,108 @@ public class EmailService : IEmailService
                 </div>
             </body>
             </html>";
+    }
+
+    private string GetConfirmationSubject(string language)
+    {
+        return language switch
+        {
+            "en" => "Your Form Has Been Received",
+            "fr" => "Votre formulaire a été reçu",
+            "ku" => "Forma we ya we hat gihişt",
+            _ => "İletişim Formunuz Alındı"
+        };
+    }
+
+    private (string title, string greeting, string message, string thanks, string footer) GetConfirmationTexts(string language)
+    {
+        return language switch
+        {
+            "en" => (
+                "Form Received",
+                "Hello",
+                "Your contact form has been successfully received. We will get back to you as soon as possible.",
+                "Thank you!",
+                "X Consultation - Contact System"
+            ),
+            "fr" => (
+                "Formulaire Reçu",
+                "Bonjour",
+                "Votre formulaire de contact a été reçu avec succès. Nous vous répondrons dès que possible.",
+                "Merci!",
+                "X Consultation - Système de Contact"
+            ),
+            "ku" => (
+                "Forma Hate",
+                "Bi xêr",
+                "Forma kontakta we bi serkeftî hate qebûl kirin. Em lez re dê bi we re têkevin.",
+                "Spas!",
+                "X Consultation - Pergala Têkiliyê"
+            ),
+            _ => (
+                "Formunuz Alındı",
+                "Merhaba",
+                "İletişim formunuz başarıyla alınmıştır. En kısa zamanda sizinle iletişime geçeceğiz.",
+                "Teşekkürler!",
+                "X Consultation - İletişim Sistemi"
+            )
+        };
+    }
+
+    private string GetAppointmentConfirmationSubject(string language)
+    {
+        return language switch
+        {
+            "en" => "✓ Your Appointment Request Received",
+            "fr" => "✓ Votre demande de rendez-vous reçue",
+            "ku" => "✓ Daxwaza berfireha we hate qebûl kirin",
+            _ => "✓ Randevu Talebiniz Alındı"
+        };
+    }
+
+    private (string title, string greeting, string message, string thanks, string footer) GetAppointmentConfirmationTexts(string language)
+    {
+        return language switch
+        {
+            "en" => (
+                "Appointment Request Received",
+                "Hello",
+                "Your quick appointment request has been successfully received. Our team will contact you as soon as possible to confirm your appointment.",
+                "Thank you for choosing us!",
+                "X Consultation - Appointment System"
+            ),
+            "fr" => (
+                "Demande de Rendez-vous Reçue",
+                "Bonjour",
+                "Votre demande de rendez-vous rapide a été reçue avec succès. Notre équipe vous contactera dès que possible pour confirmer votre rendez-vous.",
+                "Merci de nous avoir choisis!",
+                "X Consultation - Système de Rendez-vous"
+            ),
+            "ku" => (
+                "Daxwaza Berfireh Hate Qebûl Kirin",
+                "Bi xêr",
+                "Daxwaza berfireha we ya bilez bi serkeftî hate qebûl kirin. Tîma me dê bi zû bi we re têkevin têkiliyê da ku berfireha we bipejirînin.",
+                "Spas ji bo hilbijartina me!",
+                "X Consultation - Pergala Berfireh"
+            ),
+            _ => (
+                "Randevu Talebiniz Alındı",
+                "Merhaba",
+                "Hızlı randevu talebiniz başarıyla alınmıştır. Ekibimiz randevunuzu onaylamak için en kısa zamanda sizinle iletişime geçecektir.",
+                "Bizi tercih ettiğiniz için teşekkürler!",
+                "X Consultation - Randevu Sistemi"
+            )
+        };
+    }
+
+    private string GetLanguageName(string language)
+    {
+        return language switch
+        {
+            "en" => "English",
+            "fr" => "Français",
+            "ku" => "Kurdî",
+            _ => "Türkçe"
+        };
     }
 }

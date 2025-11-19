@@ -28,7 +28,8 @@ if (!string.IsNullOrEmpty(firebaseJson))
 // Add services to the container.
 builder.Services.AddControllers();
 builder.Services.AddOpenApi();
-builder.Services.AddScoped<IEmailService, EmailService>();
+// builder.Services.AddScoped<IEmailService, EmailService>();
+builder.Services.AddHttpClient<IEmailService, EmailService>();
 builder.Services.AddLogging();
 builder.Services.AddSingleton<FirestoreService>();
 
