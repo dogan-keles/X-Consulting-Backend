@@ -1,22 +1,27 @@
 using X_Consulation.ContactFormApi.Services;
 
 var builder = WebApplication.CreateBuilder(args);
-// Railway/Render deployment için PORT ayarı - ZORUNLU!
+
+// Railway/Render deployment için PORT ayarı
 var port = Environment.GetEnvironmentVariable("PORT") ?? "5211";
 builder.WebHost.UseUrls($"http://+:{port}");
 
-// CORS ayarları - API için önemli
+// CORS ayarları - Frontend için
 builder.Services.AddCors(options =>
 {
     options.AddDefaultPolicy(policy =>
     {
-        policy.AllowAnyOrigin()
+        policy.WithOrigins(
+                "http://localhost:3000",
+                "http://localhost:5173",
+                "https://x-consulting.vercel.app"
+            )
             .AllowAnyMethod()
             .AllowAnyHeader();
     });
 });
 
-// Firestore credentials için (eğer environment variable kullanacaksanız)
+// Firestore credentials
 var firebaseJson = Environment.GetEnvironmentVariable("FIREBASE_CREDENTIALS_JSON");
 if (!string.IsNullOrEmpty(firebaseJson))
 {
@@ -25,38 +30,25 @@ if (!string.IsNullOrEmpty(firebaseJson))
     Environment.SetEnvironmentVariable("GOOGLE_APPLICATION_CREDENTIALS", tempPath);
 }
 
-// Add services to the container.
+// Services
 builder.Services.AddControllers();
 builder.Services.AddOpenApi();
-// builder.Services.AddScoped<IEmailService, EmailService>();
 builder.Services.AddHttpClient<IEmailService, EmailService>();
 builder.Services.AddLogging();
 builder.Services.AddSingleton<FirestoreService>();
 
-builder.Services.AddCors(options =>
-{
-    options.AddPolicy("AllowReactApp", builder =>
-    {
-        builder.WithOrigins("http://localhost:3000")
-            .AllowAnyMethod()
-            .AllowAnyHeader();
-    });
-});
-
 var app = builder.Build();
+
+// CORS middleware
 app.UseCors();
 
-// Configure the HTTP request pipeline.
+// Development
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
 }
 
-app.UseCors("AllowReactApp");
-
-
 app.UseHttpsRedirection();
-
 app.MapControllers();
 
 var summaries = new[]
